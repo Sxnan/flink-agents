@@ -141,6 +141,8 @@ public class ActionExecutionOperator<IN, OUT> extends AbstractStreamOperator<OUT
     // processed.
     private transient ListState<Object> currentProcessingKeysOpState;
 
+    private transient ListState<Object> recoveryMarkerOpState;
+
     private final transient EventLogger eventLogger;
     private final transient List<EventListener> eventListeners;
 
@@ -183,7 +185,7 @@ public class ActionExecutionOperator<IN, OUT> extends AbstractStreamOperator<OUT
         // init the action state store with proper implementation
         if (actionStateStore == null
                 && KAFKA.getType()
-                        .equalsIgnoreCase(agentPlan.getConfig().get(ACTION_STATE_STORE_BACKEND))) {
+                .equalsIgnoreCase(agentPlan.getConfig().get(ACTION_STATE_STORE_BACKEND))) {
             LOG.info("Using Kafka as backend of action state store.");
             actionStateStore = new KafkaActionStateStore();
         }
@@ -215,6 +217,16 @@ public class ActionExecutionOperator<IN, OUT> extends AbstractStreamOperator<OUT
                         .getUnionListState(
                                 new ListStateDescriptor<>(
                                         "currentProcessingKeys", TypeInformation.of(Object.class)));
+
+        // We use UnionList here to ensure that the task can access all the recovery marker after
+        // parallelism modifications.
+        // The ActionStateStore will decide how to use the recovery markers.
+        recoveryMarkerOpState =
+                getOperatorStateBackend()
+                        .getUnionListState(
+                                new ListStateDescriptor<>(
+                                        RECOVERY_MARKER_STATE_NAME,
+                                        TypeInformation.of(Object.class)));
 
         // init PythonActionExecutor
         initPythonActionExecutor();
@@ -468,22 +480,14 @@ public class ActionExecutionOperator<IN, OUT> extends AbstractStreamOperator<OUT
         super.initializeState(context);
 
         if (actionStateStore != null) {
-            Object recoveryMarker = null;
-            ListState<Object> recoveryMarkerOpState =
-                    getOperatorStateBackend()
-                            .getListState(
-                                    new ListStateDescriptor<>(
-                                            RECOVERY_MARKER_STATE_NAME,
-                                            TypeInformation.of(Object.class)));
             Iterable<Object> recoveryMarkers = recoveryMarkerOpState.get();
+            List<Object> markers = new ArrayList<>();
             if (recoveryMarkers != null) {
                 for (Object marker : recoveryMarkers) {
-                    // there should be only one recovery marker
-                    recoveryMarker = marker;
-                    break;
+                    markers.add(marker);
                 }
             }
-            actionStateStore.rebuildState(recoveryMarker);
+            actionStateStore.rebuildState(markers);
         }
     }
 
@@ -493,12 +497,6 @@ public class ActionExecutionOperator<IN, OUT> extends AbstractStreamOperator<OUT
         if (actionStateStore != null) {
             Object recoveryMarker = actionStateStore.getRecoveryMarker();
             if (recoveryMarker != null) {
-                ListState<Object> recoveryMarkerOpState =
-                        getOperatorStateBackend()
-                                .getListState(
-                                        new ListStateDescriptor<>(
-                                                RECOVERY_MARKER_STATE_NAME,
-                                                TypeInformation.of(Object.class)));
                 recoveryMarkerOpState.update(List.of(recoveryMarker));
             }
         }
@@ -657,7 +655,9 @@ public class ActionExecutionOperator<IN, OUT> extends AbstractStreamOperator<OUT
         actionStateStore.put(key, sequenceNum, action, event, actionState);
     }
 
-    /** Failed to execute Action task. */
+    /**
+     * Failed to execute Action task.
+     */
     public static class ActionTaskExecutionException extends Exception {
         public ActionTaskExecutionException(String message, Throwable cause) {
             super(message, cause);

@@ -21,6 +21,7 @@ import org.apache.flink.agents.api.Event;
 import org.apache.flink.agents.plan.Action;
 
 import java.io.IOException;
+import java.util.List;
 
 /** Interface for storing and retrieving the state of actions performed by agents. */
 public interface ActionStateStore {
@@ -68,7 +69,7 @@ public interface ActionStateStore {
      * Retrieve all states associated with a given key from the backend storage and recover the
      * local action states.
      */
-    void rebuildState(Object recoveryMarker);
+    void rebuildState(List<Object> recoveryMarkers);
 
     /** Clean up state store to avoid evergrowing storage usage. */
     void cleanUpState();
