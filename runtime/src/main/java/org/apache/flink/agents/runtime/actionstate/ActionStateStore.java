@@ -71,8 +71,13 @@ public interface ActionStateStore {
      */
     void rebuildState(List<Object> recoveryMarkers);
 
-    /** Clean up state store to avoid evergrowing storage usage. */
-    void cleanUpState();
+    /**
+     * Clean up action state for the given key up to the given sequence number
+     *
+     * @param key the key of the action state to be clean
+     * @param seqNum the sequence number of the key
+     */
+    void cleanUpState(Object key, long seqNum);
 
     /**
      * Get a marker object representing the current recovery point in the state store.

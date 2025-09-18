@@ -54,13 +54,17 @@ import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.python.env.PythonDependencyInfo;
+import org.apache.flink.runtime.checkpoint.CheckpointOptions;
+import org.apache.flink.runtime.state.CheckpointStreamFactory;
 import org.apache.flink.runtime.state.StateInitializationContext;
-import org.apache.flink.runtime.state.StateSnapshotContext;
+import org.apache.flink.runtime.state.VoidNamespace;
+import org.apache.flink.runtime.state.VoidNamespaceSerializer;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
 import org.apache.flink.streaming.api.operators.BoundedOneInput;
 import org.apache.flink.streaming.api.operators.ChainingStrategy;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
+import org.apache.flink.streaming.api.operators.OperatorSnapshotFutures;
 import org.apache.flink.streaming.api.operators.StreamingRuntimeContext;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
@@ -68,6 +72,7 @@ import org.apache.flink.streaming.runtime.tasks.mailbox.MailboxExecutorImpl;
 import org.apache.flink.streaming.runtime.tasks.mailbox.MailboxProcessor;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.ExceptionUtils;
+import org.apache.flink.util.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,6 +81,7 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.apache.flink.agents.api.configuration.AgentConfigOptions.ACTION_STATE_STORE_BACKEND;
@@ -148,6 +154,8 @@ public class ActionExecutionOperator<IN, OUT> extends AbstractStreamOperator<OUT
 
     private transient ActionStateStore actionStateStore;
     private transient ValueState<Long> sequenceNumberKState;
+    private transient ValueStateDescriptor<Long> sequenceNumberKStateDescriptor;
+    private final transient Map<Long, Map<Object, Long>> checkpointIdToSeqNums;
 
     public ActionExecutionOperator(
             AgentPlan agentPlan,
@@ -163,6 +171,7 @@ public class ActionExecutionOperator<IN, OUT> extends AbstractStreamOperator<OUT
         this.eventLogger = EventLoggerFactory.createLogger(EventLoggerConfig.builder().build());
         this.eventListeners = new ArrayList<>();
         this.actionStateStore = actionStateStore;
+        this.checkpointIdToSeqNums = new HashMap<>();
     }
 
     @Override
@@ -185,17 +194,15 @@ public class ActionExecutionOperator<IN, OUT> extends AbstractStreamOperator<OUT
         // init the action state store with proper implementation
         if (actionStateStore == null
                 && KAFKA.getType()
-                .equalsIgnoreCase(agentPlan.getConfig().get(ACTION_STATE_STORE_BACKEND))) {
+                        .equalsIgnoreCase(agentPlan.getConfig().get(ACTION_STATE_STORE_BACKEND))) {
             LOG.info("Using Kafka as backend of action state store.");
             actionStateStore = new KafkaActionStateStore();
         }
 
         // init sequence number state for per key message ordering
-        sequenceNumberKState =
-                getRuntimeContext()
-                        .getState(
-                                new ValueStateDescriptor<>(
-                                        MESSAGE_SEQUENCE_NUMBER_STATE_NAME, Long.class));
+        sequenceNumberKStateDescriptor =
+                new ValueStateDescriptor<>(MESSAGE_SEQUENCE_NUMBER_STATE_NAME, Long.class);
+        sequenceNumberKState = getRuntimeContext().getState(sequenceNumberKStateDescriptor);
 
         // init agent processing related state
         actionTasksKState =
@@ -492,20 +499,44 @@ public class ActionExecutionOperator<IN, OUT> extends AbstractStreamOperator<OUT
     }
 
     @Override
-    public void snapshotState(StateSnapshotContext context) throws Exception {
-        super.snapshotState(context);
+    public OperatorSnapshotFutures snapshotState(
+            long checkpointId,
+            long timestamp,
+            CheckpointOptions checkpointOptions,
+            CheckpointStreamFactory factory)
+            throws Exception {
+
         if (actionStateStore != null) {
             Object recoveryMarker = actionStateStore.getRecoveryMarker();
             if (recoveryMarker != null) {
                 recoveryMarkerOpState.update(List.of(recoveryMarker));
             }
+
+            Preconditions.checkState(!checkpointIdToSeqNums.containsKey(checkpointId));
+            HashMap<Object, Long> keyToSeqNum = new HashMap<>();
+            getKeyedStateBackend()
+                    .applyToAllKeys(
+                            VoidNamespace.INSTANCE,
+                            VoidNamespaceSerializer.INSTANCE,
+                            sequenceNumberKStateDescriptor,
+                            (key, state) -> {
+                                keyToSeqNum.put(key, state.value());
+                            });
+            checkpointIdToSeqNums.put(checkpointId, keyToSeqNum);
         }
+        return super.snapshotState(checkpointId, timestamp, checkpointOptions, factory);
     }
 
     @Override
     public void notifyCheckpointComplete(long checkpointId) throws Exception {
         super.notifyCheckpointComplete(checkpointId);
-        actionStateStore.cleanUpState();
+        if (actionStateStore != null) {
+            Map<Object, Long> keyToSeqNum = checkNotNull(checkpointIdToSeqNums.get(checkpointId));
+            for (Map.Entry<Object, Long> entry : keyToSeqNum.entrySet()) {
+                actionStateStore.cleanUpState(entry.getKey(), entry.getValue());
+            }
+            checkpointIdToSeqNums.remove(checkpointId);
+        }
     }
 
     private Event wrapToInputEvent(IN input) {
@@ -655,9 +686,7 @@ public class ActionExecutionOperator<IN, OUT> extends AbstractStreamOperator<OUT
         actionStateStore.put(key, sequenceNum, action, event, actionState);
     }
 
-    /**
-     * Failed to execute Action task.
-     */
+    /** Failed to execute Action task. */
     public static class ActionTaskExecutionException extends Exception {
         public ActionTaskExecutionException(String message, Throwable cause) {
             super(message, cause);
