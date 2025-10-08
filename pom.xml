@@ -209,6 +209,27 @@ under the License.
     </profiles>
 
     <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-javadoc-plugin</artifactId>
+                    <version>3.8.0</version>
+                    <configuration>
+                        <quiet>true</quiet>
+                        <detectOfflineLinks>false</detectOfflineLinks>
+                        <release>11</release>
+                        <additionalJOptions>
+                            <additionalJOption>-Xdoclint:none</additionalJOption>
+                            <additionalJOption>--allow-script-in-comments</additionalJOption>
+                            <!-- Suppress the error that is accepted by JDK 8 but not by JDK 11. -->
+                            <additionalJOption>--ignore-source-errors</additionalJOption>
+                        </additionalJOptions>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
         <plugins>
             <plugin>
                 <groupId>com.diffplug.spotless</groupId>
