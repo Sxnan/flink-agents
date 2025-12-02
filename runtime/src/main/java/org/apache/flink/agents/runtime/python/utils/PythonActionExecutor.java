@@ -123,7 +123,10 @@ public class PythonActionExecutor {
     }
 
     public PythonEvent wrapToInputEvent(Object eventData) {
-        checkState(eventData instanceof byte[]);
+        checkState(
+                eventData instanceof byte[],
+                "Event data must be a byte array but got %s",
+                eventData.getClass().getName());
         // wrap_to_input_event returns a tuple of (bytes, str)
         Object result = interpreter.invoke(WRAP_TO_INPUT_EVENT, eventData);
         checkState(result.getClass().isArray() && ((Object[]) result).length == 2);

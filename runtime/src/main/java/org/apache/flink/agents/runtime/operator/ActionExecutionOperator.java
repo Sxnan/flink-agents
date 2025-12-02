@@ -85,6 +85,7 @@ import java.util.Optional;
 
 import static org.apache.flink.agents.api.configuration.AgentConfigOptions.ACTION_STATE_STORE_BACKEND;
 import static org.apache.flink.agents.runtime.actionstate.ActionStateStore.BackendType.KAFKA;
+import static org.apache.flink.agents.runtime.eventlog.FileEventLogger.BASE_LOG_DIR_PROPERTY_KEY;
 import static org.apache.flink.agents.runtime.utils.StateUtil.*;
 import static org.apache.flink.util.Preconditions.checkState;
 
@@ -171,7 +172,15 @@ public class ActionExecutionOperator<IN, OUT> extends AbstractStreamOperator<OUT
         this.processingTimeService = processingTimeService;
         this.chainingStrategy = ChainingStrategy.ALWAYS;
         this.mailboxExecutor = mailboxExecutor;
-        this.eventLogger = EventLoggerFactory.createLogger(EventLoggerConfig.builder().build());
+        this.eventLogger =
+                EventLoggerFactory.createLogger(
+                        EventLoggerConfig.builder()
+                                .property(
+                                        BASE_LOG_DIR_PROPERTY_KEY,
+                                        agentPlan
+                                                .getConfig()
+                                                .getStr(BASE_LOG_DIR_PROPERTY_KEY, "/flink/log"))
+                                .build());
         this.eventListeners = new ArrayList<>();
         this.actionStateStore = actionStateStore;
         this.checkpointIdToSeqNums = new HashMap<>();

@@ -55,6 +55,6 @@ rm -rf dist/  # Clean old build artifacts before building
 pip install uv
 uv sync --extra dev
 uv run python -m build
-uv pip install dist/*.whl
+#uv pip install dist/*.whl
 
-rm -rf ${PYTHON_LIB_DIR}
+#rm -rf ${PYTHON_LIB_DIR}

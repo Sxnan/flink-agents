@@ -25,6 +25,8 @@ import org.apache.flink.agents.api.logger.EventLogger;
 import org.apache.flink.agents.api.logger.EventLoggerConfig;
 import org.apache.flink.agents.api.logger.EventLoggerOpenParams;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;
@@ -75,6 +77,8 @@ import java.nio.file.Paths;
  * </pre>
  */
 public class FileEventLogger implements EventLogger {
+    private static final Logger LOG = LoggerFactory.getLogger(FileEventLogger.class);
+
     public static final String BASE_LOG_DIR_PROPERTY_KEY = "baseLogDir";
     // The default base log directory if not specified in the configuration
     private static final String DEFAULT_BASE_LOG_DIR =
@@ -94,6 +98,7 @@ public class FileEventLogger implements EventLogger {
     @Override
     public void open(EventLoggerOpenParams params) throws Exception {
         String logFilePath = generateSubTaskLogFilePath(params);
+        LOG.info("Opening FileEventLogger for log file: {}", logFilePath);
         // Create base directory if it doesn't exist
         Path logPath = Paths.get(logFilePath).getParent();
         if (!Files.exists(logPath)) {
