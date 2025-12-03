@@ -50,11 +50,12 @@ dependencies = [
     "setuptools>=75.3",
     "importlib-resources==6.5.2",
     #TODO: Seperate integration dependencies from project
-#    "ollama==0.4.8",
+    #    "ollama==0.4.8",
     "dashscope~=1.24.2",
-#    "openai>=1.66.3",
-#    "anthropic>=0.64.0",
-#    "chromadb==1.0.21",
+    #    "openai>=1.66.3",
+    #    "anthropic>=0.64.0",
+    #    "chromadb==1.0.21",
+    "alibabacloud-ha3engine-vector>=1.1.17",
 ]
 
 [tool.setuptools]
