@@ -17,6 +17,7 @@
 #################################################################################
 import contextlib
 import json
+import logging
 import os
 import uuid
 from typing import Any, Dict, List, Sequence, cast
@@ -103,6 +104,7 @@ class TongyiChatModelConnection(BaseChatModelConnection):
         **kwargs: Any,
     ) -> ChatMessage:
         """Process a sequence of messages, and return a response."""
+        logging.info(f"Tongyi Chat messages: {messages}")
         tongyi_messages = self.__convert_to_tongyi_messages(messages)
 
         tongyi_tools: List[Dict[str, Any]] | None = (
