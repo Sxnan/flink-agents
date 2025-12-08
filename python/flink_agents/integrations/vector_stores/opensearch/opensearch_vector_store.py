@@ -16,7 +16,6 @@
 # limitations under the License.
 ################################################################################
 import json
-import os
 from typing import Any
 
 from alibabacloud_ha3engine_vector.client import Client
@@ -28,7 +27,6 @@ from flink_agents.api.vector_stores.vector_store import (
     Document,
 )
 
-DEFAULT_TABLE = "flink_agents_opensearch_table"
 DEFAULT_CONTENT_FIELD = "content"
 
 
@@ -46,9 +44,9 @@ class OpenSearchVectorStore(BaseVectorStore):
     endpoint : str
         API endpoint for OpenSearch instance. Can be found in instance details page.
         Example: "http://ha-cn-xxxxx.public.ha.aliyuncs.com"
-    access_user_name : str
+    username : str
         Username for OpenSearch API authentication.
-    access_pass_word : str
+    password : str
         Password for OpenSearch API authentication.
     table_name : str
         Name of the OpenSearch table to query (default: flink_agents_opensearch_table).
@@ -58,25 +56,20 @@ class OpenSearchVectorStore(BaseVectorStore):
 
     # Connection configuration
     endpoint: str = Field(
-        default_factory=lambda: os.getenv("OPENSEARCH_ENDPOINT", ""),
         description="API endpoint for OpenSearch instance.",
     )
-    access_user_name: str = Field(
-        default_factory=lambda: os.getenv("OPENSEARCH_USERNAME", ""),
+    username: str = Field(
         description="Username for OpenSearch API authentication.",
     )
-    access_pass_word: str = Field(
-        default_factory=lambda: os.getenv("OPENSEARCH_PASSWORD", ""),
+    password: str = Field(
         description="Password for OpenSearch API authentication.",
     )
 
     # Query configuration
     table_name: str = Field(
-        default=DEFAULT_TABLE,
         description="Name of the OpenSearch table to query.",
     )
     content_field: str = Field(
-        default=DEFAULT_CONTENT_FIELD,
         description="Field name for document content in search results.",
     )
 
@@ -86,37 +79,29 @@ class OpenSearchVectorStore(BaseVectorStore):
         self,
         *,
         embedding_model: str,
-        endpoint: str | None = None,
-        access_user_name: str | None = None,
-        access_pass_word: str | None = None,
-        table_name: str = DEFAULT_TABLE,
-        content_field: str = DEFAULT_CONTENT_FIELD,
+        endpoint: str,
+        username: str,
+        password: str,
+        table_name: str,
+        content_field: str,
         **kwargs: Any,
     ) -> None:
         """Initialize OpenSearchVectorStore.
 
         Args:
             embedding_model: Name of the embedding model resource to use
-            endpoint: API endpoint (overrides OPENSEARCH_ENDPOINT env var)
-            access_user_name: Username (overrides OPENSEARCH_USERNAME env var)
-            access_pass_word: Password (overrides OPENSEARCH_PASSWORD env var)
+            endpoint: API endpoint
+            username: Username
+            password: Password
             table_name: Table name to query
             content_field: Field name for document content
             **kwargs: Additional parameters
         """
-        # Use provided values or fall back to environment variables
-        if endpoint is None:
-            endpoint = os.getenv("OPENSEARCH_ENDPOINT", "")
-        if access_user_name is None:
-            access_user_name = os.getenv("OPENSEARCH_USERNAME", "")
-        if access_pass_word is None:
-            access_pass_word = os.getenv("OPENSEARCH_PASSWORD", "")
-
         super().__init__(
             embedding_model=embedding_model,
             endpoint=endpoint,
-            access_user_name=access_user_name,
-            access_pass_word=access_pass_word,
+            username=username,
+            password=password,
             table_name=table_name,
             content_field=content_field,
             **kwargs,
@@ -128,8 +113,8 @@ class OpenSearchVectorStore(BaseVectorStore):
         if self.__client is None:
             config = Config(
                 endpoint=self.endpoint,
-                access_user_name=self.access_user_name,
-                access_pass_word=self.access_pass_word,
+                access_user_name=self.username,
+                access_pass_word=self.password,
             )
             self.__client = Client(config)
         return self.__client

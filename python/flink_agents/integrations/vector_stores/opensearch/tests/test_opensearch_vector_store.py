@@ -488,10 +488,11 @@ def test_opensearch_with_real_service() -> None:
             name="test_store",
             embedding_model="mock_embeddings",
             endpoint=opensearch_endpoint,
-            access_user_name=opensearch_username,
-            access_pass_word=opensearch_password,
+            username=opensearch_username,
+            password=opensearch_password,
             table_name=test_table_name,
             get_resource=get_resource,
+            content_field="content",
         )
 
         # Step 3: Insert test data
