@@ -363,10 +363,10 @@ public class RunnerContextImpl implements RunnerContext {
         private static final String FIELD_MESSAGE = "message";
         private static final String FIELD_EXCEPTION_CLASS = "exceptionClass";
 
-        @JsonProperty(FIELD_MESSAGE)
+        @JsonProperty(FIELD_EXCEPTION_CLASS)
         private final String exceptionClass;
 
-        @JsonProperty(FIELD_EXCEPTION_CLASS)
+        @JsonProperty(FIELD_MESSAGE)
         private final String message;
 
         public DurableExecutionException() {
